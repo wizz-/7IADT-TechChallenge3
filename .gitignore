@@ -1,0 +1,74 @@
+# =========================
+# PYTHON
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# JUPYTER / CACHE
+# =========================
+.ipynb_checkpoints/
+.cache/
+*.log
+
+# =========================
+# VS CODE / IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# SECRET / LOCAL CONFIG
+# =========================
+_secret/
+*.env
+.env.*
+
+# =========================
+# MODELOS PESADOS (LLM / EMBEDDINGS)
+# =========================
+models/
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+
+# =========================
+# INDEX / RAG / FAISS
+# =========================
+src/app/data/index/
+data/index/
+*.faiss
+*.index
+*.npy
+
+# =========================
+# DATASETS GERADOS
+# =========================
+data/processed/
+data/interim/
+data/unified/
+data/final/
+*.jsonl
+
+# =========================
+# OUTPUTS / TREINAMENTO
+# =========================
+outputs/
+checkpoints/
+runs/
+wandb/
+
+# =========================
+# SISTEMA
+# =========================
+.DS_Store
+Thumbs.db

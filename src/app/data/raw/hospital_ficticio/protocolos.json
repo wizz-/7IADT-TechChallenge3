@@ -1,0 +1,103 @@
+[
+  {
+    "protocol": "Dor Torácica",
+    "definition": "Atendimento inicial de pacientes com dor torácica sugestiva de origem cardiovascular na emergência.",
+    "suspicion_criteria": [
+      "Dor torácica opressiva ou em aperto",
+      "Irradiação para braço esquerdo, dorso ou mandíbula",
+      "Dispneia associada",
+      "Sudorese ou náuseas"
+    ],
+    "initial_exams": [
+      "Eletrocardiograma (ECG) imediato",
+      "Troponina sérica",
+      "Radiografia de tórax"
+    ],
+    "initial_management": [
+      "Monitorização cardíaca contínua",
+      "Acesso venoso periférico",
+      "Oxigenoterapia se saturação < 94%",
+      "Analgesia conforme avaliação clínica",
+      "Repetir troponina após 3 horas"
+    ],
+    "high_risk_criteria": [
+      "Instabilidade hemodinâmica",
+      "Alterações isquêmicas no ECG",
+      "Troponina elevada",
+      "Dor torácica persistente ou recorrente"
+    ],
+    "referral": [
+      "Avaliação cardiológica",
+      "Internação em unidade coronariana ou UTI se alto risco"
+    ],
+    "notes": "Seguir protocolo de síndrome coronariana aguda do serviço."
+  },
+  {
+    "protocol": "Sepse",
+    "definition": "Reconhecimento e manejo inicial de pacientes com suspeita de sepse ou choque séptico.",
+    "suspicion_criteria": [
+      "Suspeita ou confirmação de infecção",
+      "Hipotensão arterial",
+      "Taquipneia",
+      "Alteração do estado mental",
+      "Oligúria ou hipoxemia"
+    ],
+    "initial_exams": [
+      "Hemograma completo",
+      "Lactato sérico",
+      "Função renal e eletrólitos",
+      "Hemoculturas antes do antibiótico",
+      "Exames de imagem conforme foco suspeito"
+    ],
+    "initial_management": [
+      "Iniciar antibiótico de amplo espectro em até 1 hora",
+      "Reposição volêmica inicial com cristaloides",
+      "Monitorização de sinais vitais e débito urinário",
+      "Controle do foco infeccioso quando possível"
+    ],
+    "high_risk_criteria": [
+      "Hipotensão persistente após reposição volêmica",
+      "Necessidade de vasopressores",
+      "Lactato elevado",
+      "Disfunção orgânica múltipla"
+    ],
+    "referral": [
+      "Encaminhamento imediato à UTI",
+      "Avaliação por equipe de terapia intensiva"
+    ],
+    "notes": "Aplicar bundle de sepse institucional nas primeiras horas."
+  },
+  {
+    "protocol": "Hipertensão",
+    "definition": "Avaliação e manejo de pacientes com pressão arterial elevada na emergência.",
+    "suspicion_criteria": [
+      "Pressão arterial ≥ 140/90 mmHg em aferições repetidas",
+      "Histórico de hipertensão arterial",
+      "Sintomas associados (cefaleia, tontura, dispneia)"
+    ],
+    "initial_exams": [
+      "Aferição seriada da pressão arterial",
+      "Eletrocardiograma",
+      "Função renal e eletrólitos",
+      "Urina tipo I",
+      "Radiografia de tórax se indicado"
+    ],
+    "initial_management": [
+      "Avaliar presença de lesão de órgão-alvo",
+      "Redução gradual da pressão arterial se necessário",
+      "Medicação anti-hipertensiva conforme protocolo",
+      "Orientação clínica ao paciente"
+    ],
+    "high_risk_criteria": [
+      "Lesão de órgão-alvo aguda (neurológica, cardíaca ou renal)",
+      "Pressão arterial ≥ 180/120 mmHg com sintomas",
+      "Edema agudo de pulmão",
+      "Síndrome coronariana associada"
+    ],
+    "referral": [
+      "Internação se emergência hipertensiva",
+      "Encaminhamento ambulatorial para seguimento se estável"
+    ],
+    "notes": "Evitar reduções abruptas da pressão arterial salvo em emergências hipertensivas."
+  }
+]

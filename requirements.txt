@@ -1,0 +1,33 @@
+# --- Core ---
+numpy
+pydantic
+python-dotenv
+rich
+tqdm
+
+# --- Transformers / LLM ---
+transformers>=4.41.0
+accelerate>=0.33.0
+datasets>=2.20.0
+safetensors
+sentencepiece
+tokenizers
+
+# --- Fine-tuning (LoRA / SFT) ---
+peft>=0.12.0
+trl>=0.9.6
+
+# --- QLoRA / quantização (opcional, mas recomendado) ---
+bitsandbytes>=0.43.0
+
+# --- RAG (embeddings + vector store) ---
+sentence-transformers>=3.0.0
+faiss-cpu
+
+# --- Orquestração ---
+langchain>=0.2.12
+langchain-community>=0.2.12
+langgraph>=0.2.0
+
+# --- Utilitários ---
+orjson

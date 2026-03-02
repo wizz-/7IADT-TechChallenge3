@@ -1,0 +1,62 @@
+[
+  {
+    "protocol": "Dor Torácica",
+    "question": "Quando solicitar troponina?",
+    "answer": "A troponina deve ser solicitada na admissão de todo paciente com suspeita de síndrome coronariana aguda.",
+    "source": "Protocolo Dor Torácica v1.0"
+  },
+  {
+    "protocol": "Dor Torácica",
+    "question": "Quando repetir troponina?",
+    "answer": "A troponina deve ser repetida após 3 horas da primeira dosagem em pacientes com suspeita clínica de síndrome coronariana aguda.",
+    "source": "Protocolo Dor Torácica v1.0"
+  },
+  {
+    "protocol": "Dor Torácica",
+    "question": "Quais sinais indicam alto risco em dor torácica?",
+    "answer": "São considerados sinais de alto risco: instabilidade hemodinâmica, alterações isquêmicas no ECG, dor torácica persistente ou recorrente e elevação de marcadores de necrose miocárdica.",
+    "source": "Protocolo Dor Torácica v1.0"
+  },
+  {
+    "protocol": "Dor Torácica",
+    "question": "Quando encaminhar para avaliação cardiológica?",
+    "answer": "Pacientes com suspeita de síndrome coronariana aguda, alterações no ECG, troponina elevada ou alto risco clínico devem ser avaliados pela cardiologia.",
+    "source": "Protocolo Dor Torácica v1.0"
+  },
+  {
+    "protocol": "Sepse",
+    "question": "Quais são os critérios para suspeita de sepse?",
+    "answer": "Suspeita-se de sepse na presença de infecção associada a disfunção orgânica aguda, como hipotensão, taquipneia, alteração do estado mental, oligúria ou hipoxemia.",
+    "source": "Protocolo Sepse v1.0"
+  },
+  {
+    "protocol": "Sepse",
+    "question": "Quando iniciar antibiótico na sepse?",
+    "answer": "O antibiótico deve ser iniciado o mais precocemente possível, idealmente dentro da primeira hora após o reconhecimento da sepse ou choque séptico.",
+    "source": "Protocolo Sepse v1.0"
+  },
+  {
+    "protocol": "Sepse",
+    "question": "Quando encaminhar paciente séptico para UTI?",
+    "answer": "Pacientes com sepse e instabilidade hemodinâmica, necessidade de drogas vasoativas, ventilação mecânica ou disfunção orgânica grave devem ser encaminhados à UTI.",
+    "source": "Protocolo Sepse v1.0"
+  },
+  {
+    "protocol": "Hipertensão",
+    "question": "Quando tratar pressão arterial elevada na emergência?",
+    "answer": "A pressão arterial elevada deve ser tratada na emergência quando associada a sintomas ou sinais de lesão de órgão-alvo, como dor torácica, dispneia, déficit neurológico ou insuficiência renal aguda.",
+    "source": "Protocolo Hipertensão v1.0"
+  },
+  {
+    "protocol": "Hipertensão",
+    "question": "Quando liberar paciente com pressão arterial elevada?",
+    "answer": "Pacientes com pressão arterial elevada sem sinais de lesão de órgão-alvo e com estabilização clínica podem receber alta com orientação e seguimento ambulatorial.",
+    "source": "Protocolo Hipertensão v1.0"
+  },
+  {
+    "protocol": "Hipertensão",
+    "question": "Quando encaminhar paciente hipertenso para acompanhamento ambulatorial?",
+    "answer": "Todo paciente com diagnóstico de hipertensão ou elevação persistente da pressão arterial deve ser encaminhado para acompanhamento ambulatorial para ajuste terapêutico e monitoramento.",
+    "source": "Protocolo Hipertensão v1.0"
+  }
+]
