@@ -72,22 +72,28 @@ def build_messages(question: str, context_block: str) -> List[Dict[str, str]]:
 
 
 def load_llm(model_dir: str, lora_dir: str | None = None):
-    if not torch.cuda.is_available():
-        raise RuntimeError("CUDA não disponível. Instale torch com CUDA.")
-
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.float16,
-    )
-
     tokenizer = AutoTokenizer.from_pretrained(model_dir, use_fast=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_dir,
-        quantization_config=bnb_config,
-        device_map="auto",
-    )
+
+    if torch.cuda.is_available():
+        print("CUDA disponível: carregando modelo em 4-bit na GPU.")
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.float16,
+        )
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_dir,
+            quantization_config=bnb_config,
+            device_map="auto",
+        )
+    else:
+        print("ATENÇÃO: CUDA não disponível. Carregando modelo em CPU (pode ser MUITO lento).")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_dir,
+            device_map="cpu",
+        )
     
     if lora_dir and os.path.isdir(lora_dir):
         model = PeftModel.from_pretrained(model, lora_dir)

@@ -40,22 +40,26 @@ Resposta médica fundamentada
 ```
 7IADT-TechChallenge3/
 │
-├── challenge/              # Materiais do Tech Challenge
+├── challenge/                   # Materiais do Tech Challenge
 │
-├── scripts/                # Scripts executáveis do pipeline
-│   ├── build_dataset.py
+├── scripts/                     # Scripts executáveis do pipeline
+│   ├── gerar_dataset_unificado.py
 │   ├── indexar_rag.py
 │   ├── chat_terminal.py
-│   └── finetune_lora.py
+│   ├── finetune_lora.py
+│   └── run_langgraph_flow.py    # Fluxo clínico com LangGraph + LangChain
 │
 ├── src/app/
 │   ├── rag/
 │   │   └── faiss_index.py
 │   │
-│   └── data/
-│       ├── source/         # Datasets originais
-│       ├── unified/        # Dataset consolidado
-│       └── index/          # Índice vetorial FAISS
+│   ├── data/
+│   │   ├── raw/                 # Datasets originais (protocolos, FAQ, PubMedQA)
+│   │   ├── processed/           # Dataset unificado (data.json)
+│   │   └── index/               # Índice vetorial FAISS
+│   │
+│   ├── langchain_assistant.py   # Cadeia RAG com LangChain (LLM local + RAG + paciente)
+│   └── langgraph_flow.py        # Grafo clínico orquestrado com LangGraph
 │
 ├── requirements.txt
 └── readme.md
