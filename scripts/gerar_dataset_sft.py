@@ -1,3 +1,4 @@
+# scripts/gerar_dataset_sft_openai.py
 from __future__ import annotations
 
 import argparse
@@ -13,18 +14,20 @@ SRC_PATH = os.path.join(PROJECT_ROOT, "src")
 if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)
 
-from transformers import AutoTokenizer
-
 SYSTEM_PROMPT = (
     "Você é um assistente médico institucional de um hospital fictício. "
-    "Responda em português do Brasil, de forma objetiva e segura. "
-    "Não prescreva doses. Não faça diagnóstico definitivo. "
-    "Quando necessário, recomende avaliação médica presencial."
+    "Responda em português do Brasil, de forma objetiva, clara e segura. "
+    "Não prescreva doses de medicamentos. "
+    "Não faça diagnóstico definitivo. "
+    "Quando houver sinais de gravidade ou incerteza relevante, recomende avaliação médica presencial. "
+    "Sempre mantenha tom profissional e direto."
 )
+
 
 def read_json(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 def write_jsonl(path: str, rows: List[Dict[str, Any]]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -32,34 +35,46 @@ def write_jsonl(path: str, rows: List[Dict[str, Any]]) -> None:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
-def make_chat_text(tokenizer, user: str, assistant: str) -> str:
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user.strip()},
-        {"role": "assistant", "content": assistant.strip()},
-    ]
-    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
 
-def rows_from_faq(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+def build_example(user: str, assistant: str, system_prompt: str = SYSTEM_PROMPT) -> Dict[str, Any]:
+    return {
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user.strip()},
+            {"role": "assistant", "content": assistant.strip()},
+        ]
+    }
+
+
+def rows_from_faq(doc: Dict[str, Any]) -> List[Dict[str, str]]:
     content = doc.get("content", "")
-    # content no seu formato tem "Pergunta:" e "Resposta:"
-    q = ""
-    a = ""
-    for line in content.splitlines():
-        if line.lower().startswith("pergunta:"):
-            q = line.split(":", 1)[1].strip()
-        elif line.lower().startswith("resposta:"):
-            a = line.split(":", 1)[1].strip()
-    if not q or not a:
-        return []
-    return [{"user": q, "assistant": a}]
+    question = ""
+    answer = ""
 
-def rows_from_protocol(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    for line in content.splitlines():
+        lower = line.lower()
+        if lower.startswith("pergunta:"):
+            question = line.split(":", 1)[1].strip()
+        elif lower.startswith("resposta:"):
+            answer = line.split(":", 1)[1].strip()
+
+    if not question or not answer:
+        return []
+
+    return [{"user": question, "assistant": answer}]
+
+
+def rows_from_protocol(doc: Dict[str, Any]) -> List[Dict[str, str]]:
     title = doc.get("title", "").replace("Protocolo -", "").strip()
     content = doc.get("content", "")
 
-    # Gera perguntas padrão a partir do protocolo.
-    # Simples, mas funciona muito bem pra LoRA: ele aprende o "jeito institucional" de responder.
+    compact = "\n".join([ln.strip() for ln in content.splitlines() if ln.strip()])
+    if not compact:
+        return []
+
+    if len(compact) > 2200:
+        compact = compact[:2200].rstrip() + "..."
+
     questions = [
         f"Resuma o protocolo institucional de {title} em passos objetivos.",
         f"Quais são os exames iniciais recomendados no protocolo de {title}?",
@@ -67,47 +82,49 @@ def rows_from_protocol(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
         f"Quando devo encaminhar no protocolo de {title}?",
     ]
 
-    # Como resposta-alvo, usamos o próprio texto do protocolo (compactado).
-    # Para não ficar gigante, pegamos trechos e removemos excesso.
-    compact = "\n".join([ln.strip() for ln in content.splitlines() if ln.strip()])
-    if len(compact) > 2200:
-        compact = compact[:2200] + "..."
+    return [{"user": q, "assistant": compact} for q in questions]
 
-    rows = []
-    for q in questions:
-        rows.append({"user": q, "assistant": compact})
-    return rows
 
-def rows_from_scientific(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
-    # Opcional: usa pouco para não “cientificar” demais o assistente.
+def rows_from_scientific(doc: Dict[str, Any]) -> List[Dict[str, str]]:
     title = doc.get("title", "").strip()
-    content = doc.get("content", "")
+    content = doc.get("content", "").strip()
+
     if not title or not content:
         return []
-    q = f"Com base em evidência científica, responda: {title}"
-    # reduz
+
     compact = "\n".join([ln.strip() for ln in content.splitlines() if ln.strip()])
     if len(compact) > 1800:
-        compact = compact[:1800] + "..."
-    return [{"user": q, "assistant": compact}]
+        compact = compact[:1800].rstrip() + "..."
+
+    question_variants = [
+        f"Resuma a evidência científica sobre: {title}",
+        f"O que a literatura apresentada informa sobre: {title}?",
+    ]
+
+    return [{"user": q, "assistant": compact} for q in question_variants]
+
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Gera dataset SFT (jsonl) a partir do data.json unificado.")
+    parser = argparse.ArgumentParser(
+        description="Gera dataset SFT em JSONL no formato da OpenAI a partir do data.json unificado."
+    )
     parser.add_argument(
         "--dataset",
         default=os.path.join(PROJECT_ROOT, "src", "app", "data", "processed", "data.json"),
+        help="Caminho do data.json unificado",
     )
     parser.add_argument(
         "--out",
-        default=os.path.join(PROJECT_ROOT, "src", "app", "data", "training", "sft_train.jsonl"),
-    )
-    parser.add_argument(
-        "--model",
-        default=os.path.join(PROJECT_ROOT, "models", "qwen2.5-7b"),
-        help="Tokenizer do modelo (Transformers) para aplicar chat template",
+        default=os.path.join(PROJECT_ROOT, "src", "app", "data", "training", "sft_train_openai.jsonl"),
+        help="Arquivo de saída JSONL para fine-tuning OpenAI",
     )
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--max_scientific", type=int, default=200)
+    parser.add_argument(
+        "--max-scientific",
+        type=int,
+        default=200,
+        help="Máximo de documentos científicos aproveitados no dataset de treino",
+    )
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -115,31 +132,33 @@ def main() -> int:
     data = read_json(args.dataset)
     docs = data.get("documents", [])
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=True)
-
     qa_pairs: List[Dict[str, str]] = []
     scientific_count = 0
 
     for doc in docs:
-        t = doc.get("type")
-        if t == "faq":
+        doc_type = doc.get("type")
+
+        if doc_type == "faq":
             qa_pairs.extend(rows_from_faq(doc))
-        elif t == "protocol":
+
+        elif doc_type == "protocol":
             qa_pairs.extend(rows_from_protocol(doc))
-        elif t == "scientific" and scientific_count < args.max_scientific:
+
+        elif doc_type == "scientific" and scientific_count < args.max_scientific:
             qa_pairs.extend(rows_from_scientific(doc))
             scientific_count += 1
 
-    # embaralha
     random.shuffle(qa_pairs)
 
-    # converte para texto com chat template
-    rows = [{"text": make_chat_text(tokenizer, r["user"], r["assistant"])} for r in qa_pairs]
+    rows = [build_example(r["user"], r["assistant"]) for r in qa_pairs]
 
     write_jsonl(args.out, rows)
-    print(f"OK: dataset SFT gerado: {args.out}")
+
+    print(f"OK: dataset SFT OpenAI gerado em: {args.out}")
     print(f" - exemplos: {len(rows)}")
+    print(f" - max_scientific: {args.max_scientific}")
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

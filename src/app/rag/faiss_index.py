@@ -1,20 +1,23 @@
+# src/app/rag/faiss_index.py
 from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+
+from app.llm.openai_client import embed_texts, load_config
 
 
 @dataclass(frozen=True)
 class RagPaths:
     dataset_path: str
     index_dir: str
-    embedding_model_dir: str
+    embedding_model_dir: str | None = None
 
 
 def _read_json(path: str) -> Any:
@@ -29,7 +32,6 @@ def _ensure_dir(path: str) -> None:
 
 
 def _normalize(v: np.ndarray) -> np.ndarray:
-    # Cosine similarity via inner product (normalize vectors)
     norms = np.linalg.norm(v, axis=1, keepdims=True) + 1e-12
     return v / norms
 
@@ -67,7 +69,6 @@ def build_chunks_from_dataset(dataset: Dict[str, Any]) -> List[Dict[str, Any]]:
         source = doc.get("source") or ""
         metadata = doc.get("metadata") or {}
 
-        # Para melhorar recall, mistura título + conteúdo no texto indexado
         full_text = f"Título: {title}\nFonte: {source}\n\n{content}".strip()
 
         for idx, part in enumerate(_chunk_text(full_text)):
@@ -86,7 +87,23 @@ def build_chunks_from_dataset(dataset: Dict[str, Any]) -> List[Dict[str, Any]]:
     return chunks
 
 
+def _embed_with_retry(texts: List[str], max_retries: int = 6) -> List[List[float]]:
+    delay = 0.5
+    last_err: Exception | None = None
+
+    for _ in range(max_retries):
+        try:
+            return embed_texts(texts)
+        except Exception as e:
+            last_err = e
+            time.sleep(delay)
+            delay = min(delay * 2.0, 8.0)
+
+    raise RuntimeError(f"Falha ao gerar embeddings após {max_retries} tentativas: {last_err}") from last_err
+
+
 def build_faiss_index(paths: RagPaths, batch_size: int = 64) -> Tuple[int, int]:
+    cfg = load_config()
     dataset = _read_json(paths.dataset_path)
     chunks = build_chunks_from_dataset(dataset)
 
@@ -95,24 +112,21 @@ def build_faiss_index(paths: RagPaths, batch_size: int = 64) -> Tuple[int, int]:
 
     _ensure_dir(paths.index_dir)
 
-    model = SentenceTransformer(paths.embedding_model_dir)
-
     texts = [c["text"] for c in chunks]
     embeddings_list: List[np.ndarray] = []
 
     for i in range(0, len(texts), batch_size):
         batch = texts[i : i + batch_size]
-        emb = model.encode(batch, show_progress_bar=False, convert_to_numpy=True)
-        embeddings_list.append(emb)
+        emb = _embed_with_retry(batch)
+        embeddings_list.append(np.asarray(emb, dtype="float32"))
 
     embeddings = np.vstack(embeddings_list).astype("float32")
     embeddings = _normalize(embeddings)
 
     dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)  # inner product (com vetores normalizados = cosine)
+    index = faiss.IndexFlatIP(dim)
     index.add(embeddings)
 
-    # Persistência (Windows-safe): salvar via bytes para suportar paths Unicode
     index_bytes = faiss.serialize_index(index)
     index_path = os.path.join(paths.index_dir, "index.faiss")
     with open(index_path, "wb") as f:
@@ -123,7 +137,8 @@ def build_faiss_index(paths: RagPaths, batch_size: int = 64) -> Tuple[int, int]:
             f.write(json.dumps(c, ensure_ascii=False) + "\n")
 
     meta = {
-        "embedding_model_dir": paths.embedding_model_dir,
+        "embedding_provider": "openai",
+        "embedding_model": cfg.embed_model,
         "dataset_path": paths.dataset_path,
         "num_chunks": len(chunks),
         "dim": dim,
@@ -149,42 +164,31 @@ def load_faiss_index(index_dir: str) -> Tuple[faiss.Index, List[Dict[str, Any]]]
     return index, chunks
 
 
-def search(
-    embedding_model_dir: str,
-    index_dir: str,
-    query: str,
-    top_k: int = 5,
-) -> List[Dict[str, Any]]:
-    model = SentenceTransformer(embedding_model_dir)
-    q_emb = model.encode([query], convert_to_numpy=True).astype("float32")
-    q_emb = _normalize(q_emb)
-
-    index, chunks = load_faiss_index(index_dir)
-    scores, ids = index.search(q_emb, top_k)
-
-    results: List[Dict[str, Any]] = []
-    for score, idx in zip(scores[0], ids[0]):
-        if idx < 0:
-            continue
-        c = chunks[int(idx)]
-        results.append(
-            {
-                "score": float(score),
-                "chunk": c,
-            }
-        )
-
-    return results
-
 class RagSearcher:
-    def __init__(self, embedding_model_dir: str, index_dir: str):
-        self.model = SentenceTransformer(embedding_model_dir)
+    def __init__(self, index_dir: str):
         self.index, self.chunks = load_faiss_index(index_dir)
+        self._cache: Dict[str, np.ndarray] = {}
 
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        q_emb = self.model.encode([query], convert_to_numpy=True).astype("float32")
+    def _embed_query(self, query: str) -> np.ndarray:
+        q = (query or "").strip()
+        if not q:
+            return np.zeros((1, self.index.d), dtype="float32")
+
+        cached = self._cache.get(q)
+        if cached is not None:
+            return cached
+
+        emb = _embed_with_retry([q])
+        q_emb = np.asarray(emb, dtype="float32")
         q_emb = _normalize(q_emb)
 
+        if len(self._cache) >= 128:
+            self._cache.clear()
+        self._cache[q] = q_emb
+        return q_emb
+
+    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        q_emb = self._embed_query(query)
         scores, ids = self.index.search(q_emb, top_k)
 
         results: List[Dict[str, Any]] = []

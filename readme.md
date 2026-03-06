@@ -1,37 +1,49 @@
-# 🏥 Assistente Médico com RAG + Fine‑Tuning (Qwen 2.5)
 
-Repositório do **Grupo 63 — Tech Challenge 3 (Pós‑Graduação IA para Devs)**.
+# 🏥 Assistente Médico com RAG + Fine‑Tuning (OpenAI)
 
-Este projeto implementa um **assistente clínico institucional com RAG + LLM local**, capaz de responder perguntas médicas fundamentadas em protocolos, FAQ clínico e literatura científica.
+Repositório do **Grupo 63 — Tech Challenge 3 (Pós‑Tech IA para Devs)**.
+
+Este projeto implementa um **assistente clínico institucional** capaz de responder perguntas médicas com base em:
+
+- protocolos hospitalares
+- FAQ clínico
+- literatura científica
+
+A solução utiliza:
+
+- **RAG (Retrieval Augmented Generation)** para recuperar evidências relevantes
+- **Fine‑tuning** para ajustar o comportamento do modelo
+- **OpenAI API** para embeddings, treinamento e geração de respostas
 
 ---
 
-# 🎯 Objetivo
+# 🎯 Objetivo do Projeto
 
-Construir um sistema de QA médico que:
+Construir um sistema de **Perguntas e Respostas Médicas** que:
 
-- interpreta perguntas clínicas em linguagem natural
-- recupera evidências relevantes (RAG)
-- gera respostas fundamentadas com LLM local
-- cita fontes e mantém contexto clínico
+- interprete perguntas clínicas em linguagem natural
+- recupere evidências relevantes de uma base de conhecimento
+- gere respostas fundamentadas
+- cite fontes utilizadas
+- mantenha segurança clínica e linguagem institucional
 
 ---
 
 # 🧠 Arquitetura de IA
 
-```
-Pergunta do usuário
-        ↓
-Embeddings (BGE)
-        ↓
-Busca vetorial (FAISS)
-        ↓
-Contexto recuperado (RAG)
-        ↓
-Qwen 2.5 + LoRA
-        ↓
-Resposta médica fundamentada
-```
+Arquitetura final implementada no projeto:
+
+Pergunta do usuário  
+↓  
+Embeddings da pergunta (OpenAI)  
+↓  
+Busca vetorial FAISS (RAG)  
+↓  
+Recuperação de contexto relevante  
+↓  
+Modelo Fine‑Tuned da OpenAI  
+↓  
+Resposta médica fundamentada com fontes
 
 ---
 
@@ -40,131 +52,224 @@ Resposta médica fundamentada
 ```
 7IADT-TechChallenge3/
 │
-├── challenge/              # Materiais do Tech Challenge
+├── challenge/
+│   └── Tech Challenge IADT - Fase 3.pdf
 │
-├── scripts/                # Scripts executáveis do pipeline
-│   ├── build_dataset.py
+├── scripts/
+│   ├── gerar_dataset_unificado.py
+│   ├── gerar_dataset_sft.py
 │   ├── indexar_rag.py
-│   ├── chat_terminal.py
-│   └── finetune_lora.py
+│   ├── testar_rag.py
+│   ├── criar_finetuning.py
+│   └── chat_terminal.py
 │
-├── src/app/
-│   ├── rag/
-│   │   └── faiss_index.py
-│   │
-│   └── data/
-│       ├── source/         # Datasets originais
-│       ├── unified/        # Dataset consolidado
-│       └── index/          # Índice vetorial FAISS
+├── src/
+│   └── app/
+│       ├── data/
+│       │   ├── raw/
+│       │   │   ├── hospital_ficticio/
+│       │   │   │   ├── faq.json
+│       │   │   │   └── protocolos.json
+│       │   │   └── pubmedqa/
+│       │   │       └── ori_pqal.json
+│       │   │
+│       │   ├── processed/
+│       │   │   └── data.json
+│       │   │
+│       │   ├── index/
+│       │   │   ├── index.faiss
+│       │   │   ├── chunks.jsonl
+│       │   │   └── meta.json
+│       │   │
+│       │   └── training/
+│       │       └── sft_train_openai.jsonl
+│       │
+│       ├── llm/
+│       │   └── openai_client.py
+│       │
+│       └── rag/
+│           └── faiss_index.py
 │
+├── .env
+├── env.sample
 ├── requirements.txt
-└── readme.md
+└── README.md
 ```
 
 ---
 
-# 📊 Datasets
+# 📚 Fontes de Dados
 
 O assistente utiliza três fontes principais:
 
-## PubMedQA
-Base científica com perguntas e respostas médicas.
-
-## FAQ Hospitalar (fictício)
-Perguntas clínicas baseadas em protocolos.
-
 ## Protocolos Clínicos
-Fluxos hospitalares estruturados.
 
-Todos são unificados em:
+Fluxos hospitalares estruturados contendo:
 
-```
-src/app/data/unified/data.json
-```
+- definição
+- critérios de suspeita
+- exames iniciais
+- conduta inicial
+- critérios de alto risco
+- encaminhamento
 
----
+## FAQ Hospitalar
 
-# ⚙️ Requisitos
+Perguntas e respostas baseadas diretamente nos protocolos clínicos.
 
-## Hardware recomendado
+## PubMedQA
 
-- GPU NVIDIA ≥ 8 GB VRAM
-- 16–32 GB RAM
-- SSD
-
-Testado em:
-
-- RTX 3060 12 GB
-- 32 GB RAM
+Base científica com perguntas e respostas médicas utilizadas para enriquecer o comportamento do modelo.
 
 ---
 
-# 🧪 Instalação
+# ⚙️ Tecnologias Utilizadas
 
-## 1. Clonar repositório
-```bash
+- Python
+- OpenAI API
+- FAISS
+- NumPy
+- python-dotenv
+- Sentence Transformers
+- LangChain
+- LangGraph
+
+---
+
+# 💻 Requisitos
+
+Este projeto foi adaptado para rodar em **qualquer computador de escritório**, sem necessidade de GPU.
+
+Requisitos:
+
+- Python 3.10+
+- acesso à internet
+- chave de API da OpenAI
+
+---
+
+# 🔑 Configuração do Ambiente
+
+## 1. Clonar o repositório
+
+```
 git clone https://github.com/wizz-/7IADT-TechChallenge3
 cd 7IADT-TechChallenge3
 ```
 
-## 2. Ambiente virtual
-```bash
+## 2. Criar ambiente virtual
+
+Windows PowerShell:
+
+```
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\activate
 ```
 
-## 3. Dependências
-```bash
+## 3. Instalar dependências
+
+```
 pip install -r requirements.txt
 ```
 
 ---
 
-# 🤖 Download dos Modelos
+# 🔐 Configurar a chave da OpenAI
 
-## LLM — Qwen 2.5‑7B
-https://huggingface.co/Qwen/Qwen2.5-7B-Instruct
+Copie o arquivo `.env.sample`:
 
-Salvar em:
 ```
-models/qwen2.5-7b
+copy .env.sample .env
 ```
 
-## Embeddings — BGE
-https://huggingface.co/BAAI/bge-small-en-v1.5
+Edite o `.env` e coloque sua chave:
 
-Salvar em:
 ```
-models/bge-small-en-v1.5
+OPENAI_API_KEY=sua_chave_aqui
+OPENAI_CHAT_MODEL=gpt-4o-mini
+OPENAI_EMBED_MODEL=text-embedding-3-small
 ```
 
 ---
 
 # 🔧 Pipeline de Execução
 
-## 1️⃣ Construir dataset unificado
-```bash
-python scripts/build_dataset.py
+A execução do projeto segue **4 etapas principais**.
+
+---
+
+# 1️⃣ Construção do Dataset Unificado
+
+Execute:
+
+```
+python scripts/gerar_dataset_unificado.py
 ```
 
 Saída:
+
 ```
-src/app/data/unified/data.json
+src/app/data/processed/data.json
 ```
 
-## 2️⃣ Gerar índice vetorial (RAG)
-```bash
+---
+
+# 2️⃣ Construção do Índice Vetorial (RAG)
+
+Execute:
+
+```
 python scripts/indexar_rag.py
 ```
 
 Saída:
+
 ```
 src/app/data/index/index.faiss
 src/app/data/index/chunks.jsonl
 ```
 
-## 3️⃣ Executar chat clínico
-```bash
+---
+
+# 3️⃣ Geração do Dataset de Fine‑Tuning
+
+Execute:
+
+```
+python scripts/gerar_dataset_sft.py
+```
+
+Saída:
+
+```
+src/app/data/training/sft_train_openai.jsonl
+```
+
+---
+
+# 4️⃣ Treinamento do Modelo
+
+Execute:
+
+```
+python scripts/criar_finetuning.py
+```
+
+Após terminar, será gerado um modelo:
+
+```
+ft:gpt-3.5-turbo:seu-projeto
+```
+
+Atualize o `.env` com esse modelo.
+
+---
+
+# 5️⃣ Executar o Chat Médico
+
+Execute:
+
+```
 python scripts/chat_terminal.py
 ```
 
@@ -173,104 +278,21 @@ Exemplo:
 ```
 > Quais exames iniciais para dor torácica?
 
-ECG imediato, troponina sérica e radiografia de tórax. [Fonte 2]
+ECG imediato, troponina sérica e radiografia de tórax. [Fonte 1]
+
 Aviso: esta orientação não substitui avaliação médica.
 ```
 
 ---
 
-# 🧬 Fine‑Tuning LoRA
+# ⚠️ Limitações
 
-```bash
-python scripts/finetune_lora.py --use-4bit --epochs 1 --max-len 1024
-```
-
-Saída:
-
-```
-models/qwen2.5-7b-lora/
-```
-
-Se a pasta existir, o chat usa automaticamente o LoRA.
-
----
-
-# ⚡ Modos de Execução
-
-## Base (sem LoRA)
-Remover:
-```
-models/qwen2.5-7b-lora
-```
-
-## Fine‑tuned
-Pasta presente → carregamento automático
-
----
-
-# 🔎 Funcionamento do RAG
-
-1. Usuário faz pergunta clínica  
-2. Sistema gera embedding  
-3. Busca semântica FAISS  
-4. Recupera trechos relevantes  
-5. Injeta no prompt do Qwen  
-6. LLM gera resposta com fontes  
-
----
-
-# 🛑 Limitações
-
-- Dataset parcialmente fictício  
-- Protocolos simulados  
-- Não substitui avaliação médica  
-- Uso educacional  
-
----
-
-# 📚 Tecnologias
-
-- Python  
-- PyTorch  
-- Transformers  
-- PEFT (LoRA)  
-- FAISS  
-- Sentence Transformers  
-- Qwen 2.5  
-- BGE Embeddings  
-
----
-
-# 🎯 Status do Projeto
-
-- ✅ Dataset unificado  
-- ✅ Pipeline RAG  
-- ✅ Chat terminal  
-- ✅ Fine‑tuning LoRA  
-- ⬜ Interface gráfica  
-- ⬜ API REST  
-- ⬜ Avaliação automática  
-
----
-
-# 🚀 Próximos Passos
-
-- Interface web clínica  
-- Métricas de resposta médica  
-- Avaliação RAG vs LoRA  
-- Workflow LangGraph  
-- Deploy local hospitalar  
+- Dataset parcialmente fictício
+- Uso educacional
+- Não substitui avaliação médica
 
 ---
 
 # 👨‍💻 Grupo 63
 
-Tech Challenge 3 — Pós‑Graduação IA para Devs
-
-(Preencher nomes)
-
----
-
-# 📜 Licença
-
-Projeto educacional — FIAP Pós‑Tech IA para Devs
+Tech Challenge 3 — Pós‑Tech IA para Devs

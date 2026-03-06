@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv(os.path.join(os.getcwd(), "_secret", ".env"))
+load_dotenv()
 
 
 @dataclass(frozen=True)
