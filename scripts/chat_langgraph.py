@@ -4,6 +4,7 @@ import argparse
 import os
 import sys
 import time
+import uuid
 from typing import List
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -13,6 +14,7 @@ if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)
 
 from app.llm.openai_client import load_config
+from app.observability.workflow_logger import WorkflowLogger
 from app.rag.faiss_index import RagSearcher
 from app.workflow.medical_graph import MedicalAssistantGraph
 from app.workflow.state import ChatMessage
@@ -55,6 +57,9 @@ def main() -> int:
         print(f"Detalhe: {e}")
         return 2
 
+    logger = WorkflowLogger()
+    session_id = str(uuid.uuid4())
+
     print(f"Modelo configurado: {cfg.chat_model}")
     print("Carregando RAG (índice FAISS)...")
     t0 = time.time()
@@ -71,6 +76,7 @@ def main() -> int:
     messages: List[ChatMessage] = []
     current_patient_id = ""
     debug_mode = False
+    turn_index = 0
 
     while True:
         try:
@@ -95,6 +101,8 @@ def main() -> int:
         if command == "/novo":
             messages = []
             current_patient_id = ""
+            session_id = str(uuid.uuid4())
+            turn_index = 0
             print("Conversa reiniciada.\n")
             continue
 
@@ -116,11 +124,20 @@ def main() -> int:
             dt = time.time() - t_call
         except Exception as e:
             print(f"\nERRO ao executar o workflow: {e}\n")
+            logger.log_interaction(
+                {
+                    "session_id": session_id,
+                    "turn_index": turn_index,
+                    "question": question,
+                    "error": str(e),
+                }
+            )
             continue
 
         answer = state.get("validated_answer", "").strip()
         sources = state.get("sources", [])
         warnings = state.get("warnings", [])
+        guardrail_flags = state.get("guardrail_flags", [])
         needs_escalation = state.get("needs_escalation", False)
         current_patient_id = state.get("current_patient_id", current_patient_id)
 
@@ -145,10 +162,37 @@ def main() -> int:
                 for warning in warnings:
                     print(f"- {warning}")
 
+            if guardrail_flags:
+                print("\nGuardrails acionados:")
+                for flag in guardrail_flags:
+                    print(f"- {flag}")
+
             if needs_escalation:
                 print("\nWorkflow: resposta marcada com atenção de segurança.")
 
             print("")
+
+        logger.log_interaction(
+            {
+                "session_id": session_id,
+                "turn_index": turn_index,
+                "question": question,
+                "current_patient_id": current_patient_id,
+                "patient_data": state.get("patient_data", {}),
+                "medical_record": state.get("medical_record", {}),
+                "retrieved_docs_count": len(state.get("retrieved_docs", [])),
+                "sources": sources,
+                "raw_answer": state.get("answer", ""),
+                "validated_answer": answer,
+                "warnings": warnings,
+                "guardrail_flags": guardrail_flags,
+                "needs_escalation": needs_escalation,
+                "duration_seconds": round(dt, 3),
+                "chat_model": cfg.chat_model,
+            }
+        )
+
+        turn_index += 1
 
     return 0
 

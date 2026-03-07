@@ -10,6 +10,7 @@ class ChatMessage(TypedDict):
 
 class MedicalWorkflowState(TypedDict, total=False):
     question: str
+    rewritten_question: str
     messages: List[ChatMessage]
 
     current_patient_id: str
@@ -28,3 +29,4 @@ class MedicalWorkflowState(TypedDict, total=False):
 
     needs_escalation: bool
     warnings: List[str]
+    guardrail_flags: List[str]
