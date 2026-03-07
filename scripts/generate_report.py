@@ -47,7 +47,7 @@ Escalações clínicas: {escalations}
 
 """
 
-    Path("outputs/report.md").write_text(report, encoding="utf-8")
+    Path("outputs/reports/report.md").write_text(report, encoding="utf-8")
 
 
 if __name__ == "__main__":
