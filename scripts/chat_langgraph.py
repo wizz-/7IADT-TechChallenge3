@@ -4,6 +4,7 @@ import argparse
 import os
 import sys
 import time
+from typing import List
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SRC_PATH = os.path.join(PROJECT_ROOT, "src")
@@ -14,10 +15,25 @@ if SRC_PATH not in sys.path:
 from app.llm.openai_client import load_config
 from app.rag.faiss_index import RagSearcher
 from app.workflow.medical_graph import MedicalAssistantGraph
+from app.workflow.state import ChatMessage
+
+
+def print_help() -> None:
+    print(
+        "Comandos:\n"
+        "  /help    - mostra ajuda\n"
+        "  /sair    - encerra\n"
+        "  /novo    - limpa o histórico da conversa\n"
+        "  /debug   - alterna exibição de detalhes técnicos\n"
+        "\nDicas:\n"
+        "  - Você pode citar o paciente na própria mensagem, por exemplo: 'me fale do paciente P001'\n"
+        "  - Depois disso, pode continuar naturalmente: 'quais exames estão pendentes?'\n"
+        "  - Para trocar de paciente, basta mencionar outro ID, como P002.\n"
+    )
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Chat no terminal com LangGraph + LangChain + RAG.")
+    parser = argparse.ArgumentParser(description="Chat no terminal com LangGraph + histórico + RAG.")
     parser.add_argument(
         "--index-dir",
         default=os.path.join(PROJECT_ROOT, "src", "app", "data", "index"),
@@ -49,7 +65,12 @@ def main() -> int:
     t1 = time.time()
     assistant = MedicalAssistantGraph(rag)
     print(f"OK. Workflow pronto em {time.time() - t1:.1f}s")
-    print("Digite sua pergunta. Comandos: /sair, /help\n")
+
+    print("\nChat iniciado. Digite /help para ajuda.\n")
+
+    messages: List[ChatMessage] = []
+    current_patient_id = ""
+    debug_mode = False
 
     while True:
         try:
@@ -61,23 +82,34 @@ def main() -> int:
         if not question:
             continue
 
-        if question.lower() in ("/sair", "/exit", "/quit"):
+        command = question.lower()
+
+        if command in ("/sair", "/exit", "/quit"):
             print("Saindo...")
             return 0
 
-        if question.lower() == "/help":
-            print(
-                "Comandos:\n"
-                "  /help  - mostra ajuda\n"
-                "  /sair  - encerra\n"
-                "\nDica: pergunte sobre protocolos, exames iniciais, critérios de risco e encaminhamentos.\n"
-            )
+        if command == "/help":
+            print_help()
+            continue
+
+        if command == "/novo":
+            messages = []
+            current_patient_id = ""
+            print("Conversa reiniciada.\n")
+            continue
+
+        if command == "/debug":
+            debug_mode = not debug_mode
+            status = "ativado" if debug_mode else "desativado"
+            print(f"Modo debug {status}.\n")
             continue
 
         try:
             t_call = time.time()
             state = assistant.invoke(
                 question=question,
+                messages=messages,
+                current_patient_id=current_patient_id,
                 top_k=args.top_k,
                 max_context_chars=args.max_context_chars,
             )
@@ -90,24 +122,33 @@ def main() -> int:
         sources = state.get("sources", [])
         warnings = state.get("warnings", [])
         needs_escalation = state.get("needs_escalation", False)
+        current_patient_id = state.get("current_patient_id", current_patient_id)
 
-        print("\n" + answer + "\n")
-        print(f"(tempo: {dt:.1f}s)")
+        messages.append({"role": "user", "content": question})
+        messages.append({"role": "assistant", "content": answer})
 
-        if sources:
-            print("\nFontes usadas (top-k):")
-            for src in sources:
-                print(f"- {src}")
+        print("")
+        print(answer)
+        print(f"\n(tempo: {dt:.1f}s)\n")
+
+        if debug_mode:
+            if current_patient_id:
+                print(f"Paciente em foco: {current_patient_id}")
+
+            if sources:
+                print("\nFontes usadas (top-k):")
+                for src in sources:
+                    print(f"- {src}")
+
+            if warnings:
+                print("\nSinais de validação do workflow:")
+                for warning in warnings:
+                    print(f"- {warning}")
+
+            if needs_escalation:
+                print("\nWorkflow: resposta marcada com atenção de segurança.")
+
             print("")
-
-        if warnings:
-            print("Sinais de validação do workflow:")
-            for warning in warnings:
-                print(f"- {warning}")
-            print("")
-
-        if needs_escalation:
-            print("Workflow: resposta marcada com atenção de segurança.\n")
 
     return 0
 

@@ -1,0 +1,31 @@
+[
+  {
+    "patient_id": "P001",
+    "nome": "João da Silva",
+    "idade": 58,
+    "sexo": "M",
+    "condicoes": [
+      "hipertensao",
+      "diabetes tipo 2"
+    ]
+  },
+  {
+    "patient_id": "P002",
+    "nome": "Maria Oliveira",
+    "idade": 34,
+    "sexo": "F",
+    "condicoes": [
+      "asma"
+    ]
+  },
+  {
+    "patient_id": "P003",
+    "nome": "Carlos Pereira",
+    "idade": 72,
+    "sexo": "M",
+    "condicoes": [
+      "insuficiencia cardiaca",
+      "hipertensao"
+    ]
+  }
+]

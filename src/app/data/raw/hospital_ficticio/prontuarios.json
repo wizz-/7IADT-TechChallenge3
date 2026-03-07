@@ -1,0 +1,48 @@
+[
+  {
+    "patient_id": "P001",
+    "ultima_consulta": "2026-02-20",
+    "medicacoes": [
+      "metformina",
+      "losartana"
+    ],
+    "exames_pendentes": [
+      "hemoglobina glicada",
+      "perfil lipidico"
+    ],
+    "sinais_vitais": {
+      "pressao": "150/95",
+      "frequencia_cardiaca": 88,
+      "temperatura": 36.7
+    }
+  },
+  {
+    "patient_id": "P002",
+    "ultima_consulta": "2026-02-10",
+    "medicacoes": [
+      "salbutamol"
+    ],
+    "exames_pendentes": [],
+    "sinais_vitais": {
+      "pressao": "120/80",
+      "frequencia_cardiaca": 72,
+      "temperatura": 36.5
+    }
+  },
+  {
+    "patient_id": "P003",
+    "ultima_consulta": "2026-02-22",
+    "medicacoes": [
+      "furosemida",
+      "enalapril"
+    ],
+    "exames_pendentes": [
+      "ecocardiograma"
+    ],
+    "sinais_vitais": {
+      "pressao": "140/90",
+      "frequencia_cardiaca": 95,
+      "temperatura": 36.8
+    }
+  }
+]

@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
+from app.data.patient_repository import PatientRepository
 from app.llm.openai_client import load_config
 from app.rag.faiss_index import RagSearcher
-from app.workflow.state import MedicalWorkflowState
+from app.workflow.state import ChatMessage, MedicalWorkflowState
+
+
+PATIENT_ID_PATTERN = re.compile(r"\bP\d{3}\b", re.IGNORECASE)
+
+
+def extract_patient_id(text: str) -> str:
+    match = PATIENT_ID_PATTERN.search(text or "")
+    if not match:
+        return ""
+    return match.group(0).upper()
 
 
 def build_context_block(results: List[Dict[str, Any]], max_chars: int = 3000) -> str:
@@ -15,18 +27,18 @@ def build_context_block(results: List[Dict[str, Any]], max_chars: int = 3000) ->
     used = 0
 
     for i, r in enumerate(results, start=1):
-        c = r["chunk"]
+        chunk = r["chunk"]
         score = r["score"]
 
         header = (
             f"[Fonte {i}] score={score:.4f} | "
-            f"type={c.get('type')} | "
-            f"doc_id={c.get('doc_id')} | "
-            f"source={c.get('source')}\n"
-            f"title={c.get('title')}\n"
+            f"type={chunk.get('type')} | "
+            f"doc_id={chunk.get('doc_id')} | "
+            f"source={chunk.get('source')}\n"
+            f"title={chunk.get('title')}\n"
         )
 
-        text = c.get("text", "")
+        text = chunk.get("text", "")
         block = f"{header}{text}\n"
 
         if used + len(block) > max_chars:
@@ -38,6 +50,23 @@ def build_context_block(results: List[Dict[str, Any]], max_chars: int = 3000) ->
     return "\n".join(parts).strip()
 
 
+def build_history_block(messages: List[ChatMessage], max_messages: int = 8) -> str:
+    recent = messages[-max_messages:] if messages else []
+    lines: List[str] = []
+
+    for msg in recent:
+        role = msg.get("role", "user")
+        content = (msg.get("content", "") or "").strip()
+
+        if not content:
+            continue
+
+        speaker = "Usuário" if role == "user" else "Assistente"
+        lines.append(f"{speaker}: {content}")
+
+    return "\n".join(lines).strip()
+
+
 def sanitize_answer(answer: str) -> str:
     text = (answer or "").strip()
 
@@ -46,23 +75,23 @@ def sanitize_answer(answer: str) -> str:
         "Com base em evidência científica",
         "Com base no contexto fornecido:",
         "Com base no contexto fornecido",
+        "Claro!",
+        "Perfeito!",
     ]
 
     for prefix in prefixes_to_remove:
         if text.startswith(prefix):
             text = text[len(prefix):].strip()
 
-    final_warning = "Aviso: esta orientação não substitui avaliação médica."
-    if final_warning not in text:
-        if text:
-            text += f"\n\n{final_warning}"
-        else:
-            text = final_warning
-
     return text
 
 
-def detect_escalation_need(question: str, answer: str, context_block: str) -> tuple[bool, List[str]]:
+def detect_escalation_need(
+    question: str,
+    answer: str,
+    context_block: str,
+    medical_record: Dict[str, Any] | None,
+) -> tuple[bool, List[str]]:
     warnings: List[str] = []
 
     q = (question or "").lower()
@@ -87,11 +116,28 @@ def detect_escalation_need(question: str, answer: str, context_block: str) -> tu
     if any(term in q for term in risk_terms):
         warnings.append("Pergunta com possível sinal de gravidade.")
 
-    if "não encontrou no material" in a or "base suficiente" in a:
+    low_coverage_terms = [
+        "não encontrei base suficiente",
+        "não há base suficiente",
+        "não encontrei informação suficiente",
+    ]
+
+    if any(term in a for term in low_coverage_terms):
         warnings.append("Resposta com baixa cobertura de contexto.")
 
     if not c.strip():
         warnings.append("Nenhum contexto recuperado pelo RAG.")
+
+    if medical_record:
+        sinais_vitais = medical_record.get("sinais_vitais", {})
+        pressao = str(sinais_vitais.get("pressao", "")).strip()
+        frequencia = sinais_vitais.get("frequencia_cardiaca")
+
+        if pressao in {"150/95", "160/100", "180/120"}:
+            warnings.append("Paciente com pressão arterial elevada no prontuário.")
+
+        if isinstance(frequencia, int) and frequencia >= 95:
+            warnings.append("Paciente com frequência cardíaca elevada no prontuário.")
 
     return (len(warnings) > 0, warnings)
 
@@ -100,11 +146,49 @@ class MedicalAssistantGraph:
     def __init__(self, rag: RagSearcher):
         cfg = load_config()
         self.rag = rag
+        self.patient_repository = PatientRepository()
         self.llm = ChatOpenAI(
             model=cfg.chat_model,
-            temperature=0,
+            temperature=0.2,
         )
         self.graph = self._build_graph()
+
+    def _resolve_patient_from_message(self, state: MedicalWorkflowState) -> MedicalWorkflowState:
+        question = state.get("question", "")
+        previous_patient_id = state.get("current_patient_id", "")
+
+        detected_patient_id = extract_patient_id(question)
+        current_patient_id = detected_patient_id or previous_patient_id
+
+        return {"current_patient_id": current_patient_id}
+
+    def _load_patient_context(self, state: MedicalWorkflowState) -> MedicalWorkflowState:
+        patient_id = state.get("current_patient_id", "").strip()
+        previous_warnings = list(state.get("warnings", []))
+
+        if not patient_id:
+            return {
+                "patient_data": {},
+                "medical_record": {},
+                "warnings": previous_warnings,
+            }
+
+        patient = self.patient_repository.get_patient(patient_id)
+        medical_record = self.patient_repository.get_prontuario(patient_id)
+
+        if patient is None:
+            previous_warnings.append(f"Paciente {patient_id} não encontrado na base estruturada.")
+            return {
+                "patient_data": {},
+                "medical_record": {},
+                "warnings": previous_warnings,
+            }
+
+        return {
+            "patient_data": patient,
+            "medical_record": medical_record or {},
+            "warnings": previous_warnings,
+        }
 
     def _retrieve_context(self, state: MedicalWorkflowState) -> MedicalWorkflowState:
         question = state["question"]
@@ -116,11 +200,11 @@ class MedicalAssistantGraph:
 
         sources: List[str] = []
         for i, r in enumerate(results, start=1):
-            c = r["chunk"]
+            chunk = r["chunk"]
             sources.append(
                 f"[Fonte {i}] score={r['score']:.4f} | "
-                f"type={c.get('type')} | doc_id={c.get('doc_id')} | "
-                f"source={c.get('source')} | title={c.get('title')}"
+                f"type={chunk.get('type')} | doc_id={chunk.get('doc_id')} | "
+                f"source={chunk.get('source')} | title={chunk.get('title')}"
             )
 
         return {
@@ -131,30 +215,57 @@ class MedicalAssistantGraph:
 
     def _generate_answer(self, state: MedicalWorkflowState) -> MedicalWorkflowState:
         question = state["question"]
+        messages = state.get("messages", [])
         context_block = state.get("context_block", "")
+        current_patient_id = state.get("current_patient_id", "")
+        patient_data = state.get("patient_data", {})
+        medical_record = state.get("medical_record", {})
+
+        history_block = build_history_block(messages)
+
+        structured_context = (
+            "CONTEXTO ESTRUTURADO DO PACIENTE:\n"
+            f"- patient_id: {current_patient_id or 'nenhum paciente em foco'}\n"
+            f"- nome: {patient_data.get('nome', 'não disponível')}\n"
+            f"- idade: {patient_data.get('idade', 'não disponível')}\n"
+            f"- sexo: {patient_data.get('sexo', 'não disponível')}\n"
+            f"- condições: {patient_data.get('condicoes', [])}\n"
+            f"- última consulta: {medical_record.get('ultima_consulta', 'não disponível')}\n"
+            f"- medicações: {medical_record.get('medicacoes', [])}\n"
+            f"- exames pendentes: {medical_record.get('exames_pendentes', [])}\n"
+            f"- sinais vitais: {medical_record.get('sinais_vitais', {})}\n"
+        )
 
         system = (
-            "Você é um assistente médico institucional de um hospital fictício. "
-            "Responda em português do Brasil. Seja objetivo, claro e seguro.\n"
-            "- NÃO prescreva doses.\n"
-            "- Não faça diagnóstico definitivo.\n"
-            "- Se houver sinais de gravidade, oriente procurar atendimento.\n"
-            "- Use o CONTEXTO fornecido quando ele for relevante.\n"
-            "- Cite as fontes como [Fonte N] ao final das frases relevantes.\n"
-            "- Se o contexto não trouxer base suficiente, diga isso claramente e responda com cautela.\n"
-            "- Não invente fatos.\n"
-            "- Não use introduções como 'Com base em evidência científica'. Responda direto."
+            "Você é um assistente médico institucional de um hospital fictício.\n"
+            "Fale em português do Brasil, de forma natural, clara e profissional.\n"
+            "Você está em um chat conversacional, então mantenha continuidade com o histórico.\n"
+            "Quando o usuário estiver falando sobre um paciente, use o contexto estruturado disponível.\n"
+            "Se faltar dado, diga isso claramente sem inventar.\n"
+            "Use o contexto recuperado do RAG quando ele ajudar, e cite [Fonte N] apenas quando isso fizer sentido clínico.\n"
+            "Não prescreva doses.\n"
+            "Não faça diagnóstico definitivo.\n"
+            "Se houver sinal de gravidade, recomende avaliação médica presencial imediata.\n"
+            "Evite responder como relatório engessado.\n"
+            "Evite repetir todos os dados do paciente se a pergunta pedir só um ponto específico.\n"
+            "Não invente fatos."
         )
 
         user = (
-            "CONTEXTO (trechos recuperados):\n"
-            f"{context_block}\n\n"
-            "PERGUNTA:\n"
+            "HISTÓRICO RECENTE DA CONVERSA:\n"
+            f"{history_block or 'Sem histórico anterior relevante.'}\n\n"
+            f"{structured_context}\n"
+            "CONTEXTO RECUPERADO PELO RAG:\n"
+            f"{context_block or 'Nenhum contexto documental relevante recuperado.'}\n\n"
+            "MENSAGEM ATUAL DO USUÁRIO:\n"
             f"{question}\n\n"
-            "INSTRUÇÕES DE RESPOSTA:\n"
-            "1) Responda em 4 a 8 linhas.\n"
-            "2) Se usar o contexto, cite as fontes no fim das frases relevantes (ex.: ... [Fonte 2]).\n"
-            "3) Termine com a linha exata: 'Aviso: esta orientação não substitui avaliação médica.'\n"
+            "INSTRUÇÕES:\n"
+            "1) Responda de forma conversacional e natural.\n"
+            "2) Se o usuário estiver se referindo ao paciente atual, mantenha esse contexto.\n"
+            "3) Se houver exames pendentes ou sinais vitais preocupantes e isso for relevante, destaque isso com cautela.\n"
+            "4) Cite [Fonte N] somente quando usar de fato o contexto documental recuperado.\n"
+            "5) Não termine sempre com uma frase fixa robótica.\n"
+            "6) Só inclua um aviso médico explícito se o caso pedir cautela clínica.\n"
         )
 
         response = self.llm.invoke(
@@ -171,22 +282,33 @@ class MedicalAssistantGraph:
         answer = state.get("answer", "")
         question = state.get("question", "")
         context_block = state.get("context_block", "")
+        medical_record = state.get("medical_record", {})
+        previous_warnings = list(state.get("warnings", []))
 
         validated = sanitize_answer(answer)
-        needs_escalation, warnings = detect_escalation_need(question, validated, context_block)
+        needs_escalation, warnings = detect_escalation_need(question, validated, context_block, medical_record)
+
+        merged_warnings = previous_warnings + warnings
 
         return {
             "validated_answer": validated,
             "needs_escalation": needs_escalation,
-            "warnings": warnings,
+            "warnings": merged_warnings,
         }
 
     def _safe_finalize(self, state: MedicalWorkflowState) -> MedicalWorkflowState:
         answer = state.get("validated_answer", "").strip()
-        warnings = state.get("warnings", [])
 
-        if warnings:
-            answer += "\n\nObservação de segurança: em caso de sinais de gravidade ou piora clínica, procurar avaliação médica presencial imediatamente."
+        if not answer:
+            answer = "Há sinais que merecem cautela clínica."
+
+        extra_warning = (
+            "Se houver piora clínica, sinais de urgência ou dúvida relevante, "
+            "o ideal é procurar avaliação médica presencial imediatamente."
+        )
+
+        if extra_warning.lower() not in answer.lower():
+            answer += f"\n\n{extra_warning}"
 
         return {"validated_answer": answer}
 
@@ -201,13 +323,17 @@ class MedicalAssistantGraph:
     def _build_graph(self):
         graph = StateGraph(MedicalWorkflowState)
 
+        graph.add_node("resolve_patient_from_message", self._resolve_patient_from_message)
+        graph.add_node("load_patient_context", self._load_patient_context)
         graph.add_node("retrieve_context", self._retrieve_context)
         graph.add_node("generate_answer", self._generate_answer)
         graph.add_node("validate_answer", self._validate_answer)
         graph.add_node("safe_finalize", self._safe_finalize)
         graph.add_node("normal_finalize", self._normal_finalize)
 
-        graph.add_edge(START, "retrieve_context")
+        graph.add_edge(START, "resolve_patient_from_message")
+        graph.add_edge("resolve_patient_from_message", "load_patient_context")
+        graph.add_edge("load_patient_context", "retrieve_context")
         graph.add_edge("retrieve_context", "generate_answer")
         graph.add_edge("generate_answer", "validate_answer")
 
@@ -228,12 +354,17 @@ class MedicalAssistantGraph:
     def invoke(
         self,
         question: str,
+        messages: List[ChatMessage] | None = None,
+        current_patient_id: str = "",
         top_k: int = 6,
         max_context_chars: int = 3000,
     ) -> MedicalWorkflowState:
         initial_state: MedicalWorkflowState = {
             "question": question,
+            "messages": messages or [],
+            "current_patient_id": current_patient_id,
             "top_k": top_k,
             "max_context_chars": max_context_chars,
+            "warnings": [],
         }
         return self.graph.invoke(initial_state)
